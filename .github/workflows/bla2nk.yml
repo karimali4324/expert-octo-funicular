@@ -43,7 +43,7 @@ jobs:
       - name: Start Chrome Remote Desktop
         shell: pwsh
         env:
-          CRD_CODE: ${{ secrets.CRD_CODE }}
+          CRD_CODE: ${{ secrets.CRD_CODE1 }}
           CRD_PIN: ${{ secrets.CRD_PIN }}
         run: |
           $exePath = "${Env:PROGRAMFILES(X86)}\Google\Chrome Remote Desktop\CurrentVersion\remoting_start_host.exe"
