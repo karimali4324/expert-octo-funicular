@@ -1,0 +1,112 @@
+name: Ultimate-Win10-CRD-Direct-Optimized
+
+on: 
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      
+      # -----------------------------------------------------------
+      # خطوة 1: إعداد بايثون وتثبيت المكتبات المطلوبة
+      # -----------------------------------------------------------
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright requests psutil pywinauto pyautogui opencv-python pywin32 selenium undetected-chromedriver pytz setuptools webdriver-manager
+          playwright install chromium
+
+      # -----------------------------------------------------------
+      # خطوة 2: تثبيت متصفح Chrome وأداة CRD
+      # -----------------------------------------------------------
+      - name: Install Chrome and CRD
+        shell: pwsh
+        run: |
+          Write-Host "⬇️ Downloading Chrome..."
+          Invoke-WebRequest -Uri "https://dl.google.com/chrome/install/latest/chrome_installer.exe" -OutFile "chrome_installer.exe"
+          Start-Process -FilePath "chrome_installer.exe" -Args "/silent /install" -Wait
+          
+          Write-Host "⬇️ Downloading CRD Host..."
+          Invoke-WebRequest -Uri "https://dl.google.com/edgedl/chrome-remote-desktop/chromeremotedesktophost.msi" -OutFile "crd.msi"
+          Start-Process -FilePath "msiexec.exe" -Args "/i crd.msi /quiet /qn" -Wait
+          Write-Host "✅ Chrome and CRD Installed Successfully."
+
+      # -----------------------------------------------------------
+      # خطوة 3: تفعيل الريموت ديسكتوب
+      # -----------------------------------------------------------
+      - name: Start Chrome Remote Desktop
+        shell: pwsh
+        env:
+          CRD_CODE: ${{ secrets.CRD_CODE }}
+          CRD_PIN: ${{ secrets.CRD_PIN }}
+        run: |
+          $exePath = "${Env:PROGRAMFILES(X86)}\Google\Chrome Remote Desktop\CurrentVersion\remoting_start_host.exe"
+          $UniqueName = "GitHub-Runner-$env:GITHUB_RUN_ID"
+          
+          Write-Host "🚀 STARTING RDP SERVICE: $UniqueName"
+          & $exePath --code="$env:CRD_CODE" --redirect-url="https://remotedesktop.google.com/_/oauthredirect" --name="$UniqueName" --pin=$env:CRD_PIN
+
+      # -----------------------------------------------------------
+      # خطوة 4: تثبيت WARP (بروكسي) + توجيه الويندوز + تثبيت Tuxler
+      # -----------------------------------------------------------
+      - name: Setup WARP, System Proxy, and Tuxler
+        shell: pwsh
+        run: |
+          Write-Host "⬇️ Downloading Cloudflare WARP..."
+          Invoke-WebRequest -Uri "https://downloads.cloudflareclient.com/v1/download/windows/ga" -OutFile "warp.msi"
+          Start-Process -FilePath "msiexec.exe" -ArgumentList "/i warp.msi /qn" -Wait -NoNewWindow
+          
+          Write-Host "⏳ Waiting for WARP service to start..."
+          Start-Sleep -Seconds 10
+          
+          cd "C:\Program Files\Cloudflare\Cloudflare WARP"
+          .\warp-cli.exe --accept-tos registration new
+          .\warp-cli.exe --accept-tos mode proxy
+          .\warp-cli.exe --accept-tos connect
+          Write-Host "✅ WARP Proxy is running on 127.0.0.1:40000"
+
+          Write-Host "⚙️ Forcing Windows to use WARP as System Proxy..."
+          $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+          Set-ItemProperty -Path $regPath -Name ProxyEnable -Value 1
+          Set-ItemProperty -Path $regPath -Name ProxyServer -Value "socks=127.0.0.1:40000"
+          
+          Write-Host "⬇️ Downloading TuxlerVPN..."
+          Invoke-WebRequest -Uri "https://api.tuxlervpn.com/extension_event.php?id=download_desktop_win" -OutFile "tuxler.exe"
+          Write-Host "📦 Installing TuxlerVPN..."
+          Start-Process -FilePath "tuxler.exe" -ArgumentList "/S" -Wait -NoNewWindow
+
+      # -----------------------------------------------------------
+      # خطوة 5: إيقاف خدمة ClearType
+      # -----------------------------------------------------------
+      - name: Disable ClearType
+        shell: pwsh
+        run: |
+          Write-Host "⚙️ Disabling ClearType..."
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothing" -Value "0"
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothingType" -Value "0"
+
+      # -----------------------------------------------------------
+      # خطوة 6: تحميل الملف وفك الضغط وتشغيل السكربت
+      # -----------------------------------------------------------
+      - name: Download, Extract and Run Script
+        shell: cmd
+        run: |
+          @echo off
+          cd /d "%USERPROFILE%\Desktop"
+          set "FILE_URL=https://huggingface.co/datasets/gfdg34fsd/rdp/resolve/main/wino.zip"
+          
+          echo ⬇️ Downloading wino.zip...
+          curl -L -o wino.zip "%FILE_URL%"
+          
+          echo 📦 Extracting files...
+          7z x wino.zip -y
+          
+          echo 🚀 Running start.py...
+          cd wino
+          python start.py
