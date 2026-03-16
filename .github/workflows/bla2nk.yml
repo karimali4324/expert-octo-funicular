@@ -52,34 +52,49 @@ jobs:
           Write-Host "🚀 STARTING RDP SERVICE: $UniqueName"
           & $exePath --code="$env:CRD_CODE" --redirect-url="https://remotedesktop.google.com/_/oauthredirect" --name="$UniqueName" --pin=$env:CRD_PIN
 
-      # -----------------------------------------------------------
+# -----------------------------------------------------------
       # خطوة 4: تثبيت WARP (بروكسي) + توجيه الويندوز + تثبيت Tuxler
       # -----------------------------------------------------------
       - name: Setup WARP, System Proxy, and Tuxler
         shell: pwsh
         run: |
+          # 1. تحديد مسارات الملفات في مجلد العمل الحالي
+          $workspace = $PWD.Path
+          $warpInstaller = Join-Path $workspace "warp.msi"
+          $tuxlerInstaller = Join-Path $workspace "tuxler.exe"
+
+          # 2. تحميل جميع البرامج أولاً قبل اللعب في إعدادات الشبكة
           Write-Host "⬇️ Downloading Cloudflare WARP..."
-          Invoke-WebRequest -Uri "https://downloads.cloudflareclient.com/v1/download/windows/ga" -OutFile "warp.msi"
-          Start-Process -FilePath "msiexec.exe" -ArgumentList "/i warp.msi /qn" -Wait -NoNewWindow
+          Invoke-WebRequest -Uri "https://downloads.cloudflareclient.com/v1/download/windows/ga" -OutFile $warpInstaller
+          
+          Write-Host "⬇️ Downloading TuxlerVPN..."
+          Invoke-WebRequest -Uri "https://api.tuxlervpn.com/extension_event.php?id=download_desktop_win" -OutFile $tuxlerInstaller
+
+          # 3. تثبيت WARP
+          Write-Host "📦 Installing Cloudflare WARP (Silent)..."
+          Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$warpInstaller`" /qn" -Wait -NoNewWindow
           
           Write-Host "⏳ Waiting for WARP service to start..."
           Start-Sleep -Seconds 10
           
-          cd "C:\Program Files\Cloudflare\Cloudflare WARP"
-          .\warp-cli.exe --accept-tos registration new
-          .\warp-cli.exe --accept-tos mode proxy
-          .\warp-cli.exe --accept-tos connect
+          # 4. إعداد WARP باستخدام المسار المباشر للأداة (بدون استخدام cd)
+          Write-Host "⚙️ Configuring WARP Proxy..."
+          $warpCli = "C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe"
+          & $warpCli --accept-tos registration new
+          & $warpCli --accept-tos mode proxy
+          & $warpCli --accept-tos connect
           Write-Host "✅ WARP Proxy is running on 127.0.0.1:40000"
 
+          # 5. إجبار الويندوز على استخدام البروكسي
           Write-Host "⚙️ Forcing Windows to use WARP as System Proxy..."
           $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
           Set-ItemProperty -Path $regPath -Name ProxyEnable -Value 1
           Set-ItemProperty -Path $regPath -Name ProxyServer -Value "socks=127.0.0.1:40000"
           
-          Write-Host "⬇️ Downloading TuxlerVPN..."
-          Invoke-WebRequest -Uri "https://api.tuxlervpn.com/extension_event.php?id=download_desktop_win" -OutFile "tuxler.exe"
+          # 6. تثبيت Tuxler (الآن سيمر اتصاله عبر بروكسي WARP تلقائياً)
           Write-Host "📦 Installing TuxlerVPN..."
-          Start-Process -FilePath "tuxler.exe" -ArgumentList "/S" -Wait -NoNewWindow
+          Start-Process -FilePath $tuxlerInstaller -ArgumentList "/S" -Wait -NoNewWindow
+          Write-Host "✅ TuxlerVPN Installed Successfully."
 
       # -----------------------------------------------------------
       # خطوة 5: إيقاف خدمة ClearType
