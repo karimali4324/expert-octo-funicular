@@ -58,66 +58,6 @@ jobs:
 
 
 
-      # -----------------------------------------------------------
-
-      # خطوة 2: إدارة العداد
-
-      # -----------------------------------------------------------
-
-      - name: Manage External Counter (Gist)
-
-        shell: pwsh
-
-        env:
-
-          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
-
-          GIST_ID: ${{ secrets.GIST_ID }}
-
-        run: |
-
-          $headers = @{ "Authorization" = "token $env:GIST_TOKEN"; "Accept" = "application/vnd.github.v3+json" }
-
-          $url = "https://api.github.com/gists/$env:GIST_ID"
-
-          $success = $false
-
-          
-
-          while (-not $success) {
-
-              try {
-
-                  $response = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -ErrorAction Stop
-
-                  $currentCount = [int]$response.files."counter.txt".content
-
-                  $newCount = $currentCount + 1
-
-                  
-
-                  $body = @{ files = @{ "counter.txt" = @{ content = [string]$newCount } } } | ConvertTo-Json -Depth 10
-
-                  Invoke-RestMethod -Uri $url -Headers $headers -Method Patch -Body $body -ErrorAction Stop
-
-                  
-
-                  echo "DEVICE_NUM=$newCount" >> $env:GITHUB_ENV
-
-                  Write-Host "✅ Counter Updated to: $newCount"
-
-                  $success = $true
-
-              }
-
-              catch {
-
-                  Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
-
-              }
-
-          }
-
 
 
       # -----------------------------------------------------------
